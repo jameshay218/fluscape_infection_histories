@@ -97,6 +97,13 @@ ar_p <- ar_p1 + theme_classic() +
   )
 ar_p
 
+n_alive <- as.data.frame(get_n_alive_group(titre_dat, strain_isolation_times)) %>% t() %>% as.data.frame() %>% rename(`N alive`=V1)
+n_alive$Date <- as.numeric(rownames(n_alive))/4
+ar_p_data <- ar_p$data %>% select(-group) %>% mutate(time=time/4) %>% rename(`Date`=time,`Lower 95% CrI`=lower, `Lower 50% CrI`=lower2,
+                                                                             `Posterior median`=`median`,`Upper 50% CrI`=upper,`Upper 95% CrI`=upper) %>%
+  left_join(n_alive)
+write.csv(ar_p_data,"~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS16A.csv",row.names=FALSE)
+
 first_sample <- min(titre_dat$samples)
 first_sample <- 8020
 inf_chain_tmp <- inf_chain[inf_chain$j >= (first_sample - 7872),]
