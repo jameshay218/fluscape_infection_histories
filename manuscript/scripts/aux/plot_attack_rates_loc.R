@@ -271,7 +271,8 @@ ar_loc_p <- ggplot(ar_estimates_by_loc) +
     #strip.text.x = element_blank()
   )
 ar_loc_p
-
+#fit_quantiles_comb %>% rename(`Distance (km)`=x,`Aggregation of infection histories/metric`=ver2,`Included time period`=ver) %>%
+#  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS9D.csv",row.names=FALSE)
 ## Get average attack rate over time
 data.table::setkey(total_infs, "sampno","LOC_ID")
 loc_quarterly_ar <- total_infs[,list(median(ar)),by=key(total_infs)]
@@ -411,6 +412,14 @@ p_supp2 <- plot_grid(
 save(ar_var_p, file=paste0(figure_wd, "/",run_name,"_coef_var_space.RData"))
 ggsave_jah(p_supp1, figure_wd,paste0(run_name, "_loc_ar"),width=6,height=7.5)
 ggsave_jah(p_supp2, figure_wd, paste0(run_name,"_loc_ar_averages"),width=7.5,height=8.75)
+
+if(FALSE){
+  ar_estimates %>% select(LOC_ID,time,n,lower_quantile,median,upper_quantile,precision,var) %>%
+    mutate(time = (time - 1 + 1968*4)/4) %>%
+    rename(`Lower 95% CrI`=lower_quantile,`Posterior median`=median,`Upper 95% CrI`=upper_quantile,Precision=precision,`Coefficient of variation`=var) %>%
+    rename(Date=time) %>%
+    write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS7.csv",row.names=FALSE)
+}
 
 ###############################################################
 ## Spatial correlation -- using posterior medians
@@ -605,5 +614,7 @@ p_corr <- ggplot(fit_quantiles_comb) +
 
 p_lhs <- ar_var_pA / ar_var_pB / ar_var_pC
 fig_ar_corr <- p_lhs | p_corr
+#fit_quantiles_comb %>% rename(`Distance (km)`=x,`Aggregation of infection histories/metric`=ver2,`Included time period`=ver) %>%
+#  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS9D.csv",row.names=FALSE)
 
 ggsave_jah(fig_ar_corr, figure_wd,paste0("location_ar_corr_",run_name),width=8,height=8)
