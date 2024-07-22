@@ -11,6 +11,12 @@ expanded_titre_dat <- merge(expanded_titre_dat, unique(titre_dat[,c("individual"
 expanded_titre_dat$samples <- expanded_titre_dat$virus
 expanded_titre_dat$titre <- 0
 expanded_titre_dat <- expanded_titre_dat[order(expanded_titre_dat$individual, expanded_titre_dat$samples),]
+
+## Comment out to solve all individuals
+inf_chain <- inf_chain %>% filter(i %in% use_indivs)
+expanded_titre_dat <- expanded_titre_dat %>% filter(individual %in% use_indivs)
+use_indivs_all <- use_indivs
+
 ## This gives median and 95% CI on model predicted titres, probability of infection in each quarter, 
 ## MLE titre predictions and MLE infection histories
 ## Not that strain-specific measurement bias is not used, as this is an observation process
@@ -122,35 +128,51 @@ masks$individual <- 1:nrow(masks)
 masks$birth <- masks$age_mask + 1968*buckets-1
 masks$sample <- masks$strain_mask + 1968*buckets -1
 
+
+titre_preds_tmp[titre_preds_tmp$individual %in% used_i,] %>% mutate(DOB = floor(DOB/4)*4) %>%
+  mutate(`Year of birth`=DOB/4,`Observation time`=samples/4) %>%
+  rename(`Individual`=individual,`Posterior median predicted titre`=median,`Lower 95% CrI`=lower,`Upper 95% CrI`=upper) %>%
+  select(-c(samples,DOB)) %>%
+  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig4.csv",row.names = FALSE)
+
+hi_titre_labels <- 5*2^seq(0,8,by=1)
+hi_titre_labels <- paste0("1:",hi_titre_labels)
+hi_titre_labels[1] <- "<1:10"
+hi_titre_labels[9] <- "≥1:1280"
+
 p2 <- ggplot(titre_preds_tmp[titre_preds_tmp$individual %in% used_i,]) +  
-    geom_rect(data=masks[masks$individual %in% used_i,],aes(xmin=1968*buckets,xmax=birth,ymin=0,ymax=9),
-              fill="grey70")+ 
-    geom_rect(data=masks[masks$individual %in% used_i,],aes(xmax=2020*buckets,xmin=sample,ymin=0,ymax=9),
-              fill="grey70")+
-    geom_vline(data=infection_predictions[infection_predictions$individual %in% used_i,],
-               aes(xintercept=samples,col=prob_inf))+
-    geom_ribbon(aes(x=samples,ymin=lower,ymax=upper),fill="lightblue")+
-    geom_line(aes(x=samples,y=median),col="blue") + 
-    theme_classic() +
-    scale_y_continuous(expand=c(0,0),breaks=seq(0,8,by=1),labels=c(0:7, "≥8"))+
-    scale_color_gradient2(low="white",mid="darkorange",high="red",limits=c(0,1),midpoint=0.5)+
-    guides(col=guide_colorbar(title="Probablity that infection occurred",
-                              title.position = "top",
-                              label.position = "bottom",
-                              direction="horizontal"))+
-    coord_cartesian(ylim=c(0,8))+
-    scale_x_continuous(breaks=x_breaks,labels=x_labels,expand=c(0.01,0.01))+
-    facet_wrap(~individual,ncol=3) +
-    theme(axis.text.x=element_text(angle=90,vjust=0.5, size=8),
-          legend.key.width = unit(0.8,"cm"),
-          legend.position=c(0.85,0.15),
-          axis.text.y=element_text(family="sans",size=8,colour="black"),
-          axis.title.y=element_text(family="sans",size=12,colour="black"),
-          axis.title.x=element_text(family="sans",size=12,colour="black"),
-          legend.text=element_text(size=7,family="sans"),
-          legend.title=element_text(size=7,family="sans"),
-          legend.key=element_rect(color="black",fill="none")) +
-    xlab("Circulation time") + ylab("log HI titre (pre infection)")
+  geom_rect(data=masks[masks$individual %in% used_i,],aes(xmin=1968*buckets,xmax=birth,ymin=0,ymax=9),
+            fill="grey70")+ 
+  geom_rect(data=masks[masks$individual %in% used_i,],aes(xmax=2020*buckets,xmin=sample,ymin=0,ymax=9),
+            fill="grey70")+
+  geom_vline(data=infection_predictions[infection_predictions$individual %in% used_i,],
+             aes(xintercept=samples,col=prob_inf))+
+  geom_label(data=titre_preds_tmp[titre_preds_tmp$individual %in% used_i,] %>% select(individual,DOB) %>%
+               mutate(DOB=paste0("Year of birth: ", floor(DOB/4)))%>%distinct(),aes(x=1980*4,y=7,label=DOB),size=3)  +
+  geom_ribbon(aes(x=samples,ymin=lower,ymax=upper),fill="lightblue")+
+  geom_line(aes(x=samples,y=median),col="blue") + 
+  theme_classic() +
+  scale_y_continuous(expand=c(0,0),breaks=seq(0,8,by=1),labels=hi_titre_labels)+
+  scale_color_gradient2(low="white",mid="darkorange",high="red",limits=c(0,1),midpoint=0.5)+
+  guides(col=guide_colorbar(title="Predicted probability that infection occurred",
+                            title.position = "top",
+                            label.position = "bottom",
+                            direction="horizontal"))+
+  coord_cartesian(ylim=c(0,8))+
+  scale_x_continuous(breaks=x_breaks,labels=x_labels,expand=c(0.01,0.01))+
+  facet_wrap(~individual,ncol=3) +
+  theme(axis.text.x=element_text(angle=90,vjust=0.5, size=8),
+        legend.key.width = unit(0.8,"cm"),
+        legend.position=c(0.85,0.15),
+        strip.text=element_blank(),
+        panel.spacing = unit(1, "lines"),
+        axis.text.y=element_text(family="sans",size=8,colour="black"),
+        axis.title.y=element_text(family="sans",size=12,colour="black"),
+        axis.title.x=element_text(family="sans",size=12,colour="black"),
+        legend.text=element_text(size=7,family="sans"),
+        legend.title=element_text(size=7,family="sans"),
+        legend.key=element_rect(color="black",fill="none")) +
+  xlab("Circulation time") + ylab("HI titre (pre infection)")
 ggsave_jah(p2, figure_wd, "reconstructed_titers",width=8,height=6)
 
 
