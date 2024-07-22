@@ -95,6 +95,6 @@ plot_infection_histories_long_mod <- function(chain, infection_histories, titre_
         coord_cartesian(ylim=c(min_titre,max_titre+1),xlim=time_range) +
         scale_y_continuous(breaks=seq(min_titre,max_titre+2,by=2)) +
         facet_wrap(individual~samples_label,ncol=2)
-    titre_pred_p
+    list(titre_pred_p, all_plot_data)
 }
 
