@@ -34,7 +34,7 @@ p_titre_fits <- plot_infection_histories_long_mod(chain=theta_chain,infection_hi
                                                   strain_isolation_times = strain_isolation_times,
                                                   mu_indices=NULL,
                                                   measurement_indices_by_time = NULL,
-                                                  par_tab=par_tab,time_key=time_key,virus_key=virus_key)
+                                                  par_tab=par_tab,time_key=time_key,virus_key=virus_key)[[1]]
 colnames(antigenic_map)[3] <- "inf_times"
 p_inf_hists <- generate_cumulative_inf_plots(inf_chain, 0, use_indivs, ages = DOBs,strain_isolation_times = antigenic_map$inf_times)
 p_cumu_infhist <- p_inf_hists[[1]] + scale_x_continuous(breaks=seq(1970,2015,by=5)*4,labels=seq(1970,2015,by=5)) + 
