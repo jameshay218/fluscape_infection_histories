@@ -31,17 +31,15 @@ coast <- read.table(paste(path,"coast.dat",sep=""), header=FALSE,
 rivers <- read.table(paste(path,"rivers.dat",sep=""), header=FALSE, 
                      sep="", stringsAsFactors=FALSE, na.strings = c("NA",">"), fill=TRUE )
 
-locs <- read.csv("~/Google Drive/My Drive/Influenza/serosolver/FluScape_epidemiology/data/loc_data_clean.csv",stringsAsFactors=FALSE)
+locs_old <- read.csv("~/Google Drive/My Drive/Influenza/serosolver/FluScape_epidemiology/data/loc_data_clean.csv",stringsAsFactors=FALSE) %>% select(LOC_ID, quintile, rank.DIST_FRM_GZ)
 
-fluscape_dat <- merge(fluscape_dat, locs[,c("LOC_ID","LOC_Lat_rnd","LOC_Long_rnd","n.samples.V1",
-                                            "badge.long","badge.lat","rank.DIST_FRM_GZ","quintile")],by="LOC_ID")
 
 ## Need to plot with jittered locations
 locs_use <- read.csv("~/Documents/GitHub/fluscape_serosolver/data/loc_data_rnd.csv")
-locs <- locs %>% dplyr::select(-c(LOC_Lat,LOC_Long)) %>% left_join(locs_use %>% dplyr::select(-c(LOC_Lat_original,LOC_Long_original))) %>% dplyr::rename(LOC_Lat=LOC_Lat_rnd,LOC_Long=LOC_Long_rnd)
+locs <- locs_use %>% select(LOC_ID, LOC_Lat_rnd,LOC_Long_rnd) %>% rename(LOC_Lat=LOC_Lat_rnd,LOC_Long=LOC_Long_rnd)
+locs <- left_join(locs, locs_old)
 
-fluscape_dat <- fluscape_dat %>% dplyr::select(-c(LOC_Lat,LOC_Long)) %>% left_join(locs_use %>% dplyr::select(-c(LOC_Lat_original,LOC_Long_original))) %>% dplyr::rename(LOC_Lat=LOC_Lat_rnd, LOC_Long=LOC_Long_rnd)
-
+fluscape_dat <- merge(fluscape_dat %>% select(-c(LOC_Lat,LOC_Long)), locs,by="LOC_ID")
 
 
 ## Order by age by group
@@ -66,10 +64,10 @@ loc_plots <- list()
 
 #y <- age_group_counts1
 visit <- "First visit"
-
-#fluscape_dat %>% select(individual,LOC_ID,quintile,LOC_Lat,LOC_Long,Full_name,`log titre`,run,raw_visit,age_group) %>%
-#  dplyr::rename(`Virus`=Full_name) %>%
-#  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS2&3.csv",row.names=FALSE)
+break
+fluscape_dat %>% select(individual,LOC_ID,quintile,LOC_Lat,LOC_Long,Full_name,`log titre`,run,raw_visit,age_group) %>%
+  dplyr::rename(`Virus`=Full_name) %>%
+  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS2&3.csv",row.names=FALSE)
 
 ## Group 3
 for(k in unique(fluscape_dat$quintile)){
