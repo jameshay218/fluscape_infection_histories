@@ -1,4 +1,4 @@
-needed_fluscape_dat <- unique(fluscape_dat[,c("individual","Participant_ID","age_group","order")])
+needed_fluscape_dat <- unique(fluscape_dat[,c("individual","Participant_ID","age_group","order")]) %>%arrange(individual,age_group) %>% group_by(individual,Participant_ID, order) %>% mutate(y=as.numeric(age_group)) %>% filter(y==min(y)) %>% select(-y)
 needed_fluscape_dat <- data.table(needed_fluscape_dat)
 DOBs <- get_DOBs(fluscape_dat %>% arrange(individual))[,2]
 age_mask <- create_age_mask(DOBs,strain_isolation_times)
@@ -20,6 +20,8 @@ colnames(densities) <- c("individual","time","Posterior probability of infection
 wow <- merge(needed_fluscape_dat, densities,by="individual")
 wow <- merge(wow, data.table(masks),by="individual")
 
+wow$age_mask <- strain_isolation_times[wow$age_mask]
+wow$strain_mask <- strain_isolation_times[wow$strain_mask]
 wow[wow$time < wow$age_mask | wow$time > wow$strain_mask,"Posterior probability of infection"] <- NA
 
 
@@ -112,7 +114,7 @@ x_labels2 <- paste0(c("Q1-","Q2-","Q3-","Q4-"),x_labels2_tmp)
 x_labels2 <- x_labels2[seq_along(x_breaks2)]
 
 p_fig2 <- cowplot::plot_grid(ar_p, p_infection, nrow=2,align="hv",axis="lr",rel_heights = c(1,1.8),labels=c("A","B"))
-
+p_infection$data %>% select(individual,DOB,time,`Posterior probability of infection`)
 ggsave_jah(p_fig2, figure_wd,"combined_infections_fig2",width=7.2,height=6)
 
 infection_histories <- inf_chain

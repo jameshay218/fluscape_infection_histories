@@ -1,9 +1,11 @@
 library(data.table)
 library(dplyr)
 library(plyr)
+library(coda)
+library(ggplot2)
 #library(serosolver)
 devtools::load_all("~/Documents/GitHub/serosolver")
-setwd("~/Documents/GitHub/fluscape_infection_histories//chains/fluscape_main_annual/")
+setwd("~/Documents/GitHub/fluscape_serosolver/chains/fluscape_main/")
 ## Calculate titer protection curve
 titre_dat <- load_titre_dat()
 antigenic_map <- load_antigenic_map_file()
@@ -17,7 +19,7 @@ sampno_key <- theta_chain %>% dplyr::select(sampno, chain_no) %>% distinct() %>%
 theta_chain <- theta_chain %>% left_join(sampno_key) %>% dplyr::select(-sampno, chain_no) %>% dplyr::rename(sampno=sampno_new)
 inf_chain <- inf_chain %>% left_join(sampno_key) %>% dplyr::select(-sampno, chain_no) %>% dplyr::rename(sampno=sampno_new)
 
-n_samps <- 50
+n_samps <- 1000
 
 calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, antigenic_map, par_tab, subset_indivs,n_samp,buckets=1,max_time=max(titre_dat$virus),min_time=min(titre_dat$virus),remove_runs=TRUE){
   use_indivs_all <- unique(titre_dat$individual)
@@ -35,10 +37,14 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
                                         nsamp=n_samp,
                                         measurement_indices_by_time = NULL,
                                         titre_before_infection = TRUE,titres_for_regression=TRUE)
-  
-  
+  rm(inf_chain)
+  gc()
+ 
   ## Extract titre predictions and get age at sample
   summary_titre_pred <- tmp_preboost$summary_titres
+  inf_hists <- tmp_preboost$all_inf_hist
+  titre_preds <- tmp_preboost$all_predictions
+  rm(tmp_preboost)
   summary_titre_pred$age_at_infection <- summary_titre_pred$samples - summary_titre_pred$DOB
   #summary_titre_pred <- summary_titre_pred[summary_titre_pred$age_at_infection >= 0,]
   summary_titre_pred$age_at_inf_year <- summary_titre_pred$age_at_infection/buckets
@@ -48,18 +54,20 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
  
   
   ## Get titre predictions for each MCMC samp and melt
-  titre_preds <- tmp_preboost$all_predictions
+  titre_preds <- data.table(titre_preds)
+  #titre_preds <- floor(titre_preds)
+  #titre_preds[titre_preds > 8] <- 8
+  summary_titre_pred <- bind_cols(summary_titre_pred[,c("individual","virus","run","age_at_infection","samples","DOB")], titre_preds)
+  # titre_preds <- titre_preds[summary_titre_pred$age_at_infection >= 0,]
   
-  summary_titre_pred <- cbind(summary_titre_pred, data.table(titre_preds))
-  summary_titre_pred <- melt(summary_titre_pred, id.vars=c("individual", "group", "virus", "run", "DOB",  
-                                                           "samples", "titre", "lower", "lower_50", "median", "upper_50", 
-                                                           "upper", "max", "age_at_infection", "age_at_inf_year", "age_group_at_inf", 
-                                                           "year"))
+  ## Why do I need to do this?
+  #summary_titre_pred <- cbind(summary_titre_pred, data.table(titre_preds))
+  summary_titre_pred <- melt(summary_titre_pred, id.vars=c("individual","virus", "run", "samples", "age_at_infection","DOB"))
   colnames(summary_titre_pred)[c(ncol(summary_titre_pred)-1, ncol(summary_titre_pred))] <- c("sampno","log_titre")
   
   ## Convert to integers and truncate at titre of 8
-  summary_titre_pred$floor_log_titre <- floor(summary_titre_pred$log_titre)
-  summary_titre_pred$floor_log_titre[summary_titre_pred$floor_log_titre > 8] <- 8
+  summary_titre_pred$log_titre <- floor(summary_titre_pred$log_titre)
+  summary_titre_pred$log_titre[summary_titre_pred$log_titre > 8] <- 8
   
   ## Remove titres before birth
   summary_titre_pred <- summary_titre_pred[summary_titre_pred$age_at_infection >= 0,]
@@ -67,7 +75,6 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
   
   
   ## Now extract corresponding infection histories
-  inf_hists <- tmp_preboost$all_inf_hist
   combined_inf_hist <- do.call("rbind", inf_hists)
   combined_inf_hist <- data.table(combined_inf_hist)
   combined_inf_hist$individual <- rep(use_indivs_all, n_samps)
@@ -99,7 +106,7 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
   setkey(tmp, individual,samples,DOB)
   infection_predictions <- tmp[,list(prob_inf=sum(infection)/n_samps),by=key(tmp)]
   
-  used_i <- individuals
+  used_i <- subset_indivs
   x_breaks <- seq(min_time, max_time+buckets, by=buckets)
   x_labels <- paste0("Q1-",floor(min_time/buckets):(floor((max_time+buckets)/buckets)))
   seq_along_labels <- seq(1,length(x_breaks),by=4)
@@ -147,9 +154,6 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
           legend.title=element_text(size=7,family="sans"),
           legend.key=element_rect(color="black",fill="none")) +
     xlab("Circulation time") + ylab("log HI titre (pre infection)")
-   
-  
-  
   ## Remove runs of consecutive infections
   if(remove_runs){
     removed_double_infs <- all_combined_data %>% 
@@ -162,16 +166,15 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
   } else {
     removed_double_infs <- all_combined_data
   }
-  
+  rm(all_combined_data)
   ## Subset to desired time range
   removed_double_infs <- removed_double_infs[removed_double_infs$samples <= max_time & removed_double_infs$samples >= min_time,]
-  
   ## Proportion of states with an infection in them
-  overall_comparison_nodoubles <- removed_double_infs %>% group_by(sampno, floor_log_titre) %>% 
+  overall_comparison_nodoubles <- removed_double_infs %>% group_by(sampno, log_titre) %>% 
     dplyr::summarize(n_infected=sum(infection),n_tot=n()) %>%
     mutate(V1=n_infected/n_tot)
   tmp <- overall_comparison_nodoubles %>% 
-    dplyr::filter(floor_log_titre == 0) %>% 
+    dplyr::filter(log_titre == 0) %>% 
     dplyr::select(sampno, V1) %>% 
     dplyr::rename(zero_titre=V1)
   
@@ -179,23 +182,27 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
   overall_comparison_nodoubles1 <- merge(overall_comparison_nodoubles, tmp)
   overall_comparison_nodoubles1 <- data.table(overall_comparison_nodoubles1)
   overall_comparison_nodoubles1$V1 <- overall_comparison_nodoubles1$V1/overall_comparison_nodoubles1$zero_titre
-  setkey(overall_comparison_nodoubles1, floor_log_titre)
+  setkey(overall_comparison_nodoubles1, log_titre)
   overall_comparison_nodoubles1 <- overall_comparison_nodoubles1[,list(median=median(V1),
                                                                        lower=quantile(V1, c(0.025)),
-                                                                       upper=quantile(V1,c(0.975))),
+                                                                       upper=quantile(V1,c(0.975)),
+                                                                       N=median(n_tot)),
                                                                  by=key(overall_comparison_nodoubles1)]
-  colnames(overall_comparison_nodoubles1) <- c("log HI titre","median","lower","upper")
+  colnames(overall_comparison_nodoubles1) <- c("log HI titre","median","lower","upper","N")
   overall_comparison_nodoubles1$`Age at time of infection` <- "All"
-  
+
   #################
   ## AGE
   ## Compare infection probs across all times by age NO REPEATS
+  removed_double_infs$age_at_inf_year <- removed_double_infs$age_at_infection/buckets
+  removed_double_infs$age_group_at_inf <- cut(removed_double_infs$age_at_inf_year, c(0,10,20,30,40,50,60,100),include.lowest = TRUE)
+  
   age_comparison_nodoubles <- removed_double_infs %>% 
-    group_by(sampno, age_group_at_inf, floor_log_titre) %>% 
+    group_by(sampno, age_group_at_inf, log_titre) %>% 
     dplyr::summarize(n_infected=sum(infection),n_tot=n()) %>%
     mutate(V1=n_infected/n_tot)
   tmp_age <- age_comparison_nodoubles %>% 
-    dplyr::filter(floor_log_titre == 0) %>% 
+    dplyr::filter(log_titre == 0) %>% 
     dplyr::select(sampno, age_group_at_inf,V1) %>% 
     dplyr::rename(zero_titre=V1)
   
@@ -203,12 +210,13 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
   overall_comparison_nodoubles_age <- merge(age_comparison_nodoubles, tmp_age)
   overall_comparison_nodoubles_age <- data.table(overall_comparison_nodoubles_age)
   overall_comparison_nodoubles_age$V1 <- overall_comparison_nodoubles_age$V1/overall_comparison_nodoubles_age$zero_titre
-  setkey(overall_comparison_nodoubles_age, floor_log_titre, age_group_at_inf)
+  setkey(overall_comparison_nodoubles_age, log_titre, age_group_at_inf)
   overall_comparison_nodoubles_age <- overall_comparison_nodoubles_age[,list(median=median(V1),
                                                                              lower=quantile(V1, c(0.025)),
-                                                                             upper=quantile(V1,c(0.975))),
+                                                                             upper=quantile(V1,c(0.975)),
+                                                                             N=median(as.numeric(n_tot))),
                                                                        by=key(overall_comparison_nodoubles_age)]
-  colnames(overall_comparison_nodoubles_age) <- c("log HI titre","Age at time of infection","median","lower","upper")
+  colnames(overall_comparison_nodoubles_age) <- c("log HI titre","Age at time of infection","median","lower","upper","N")
   
   
   ###########
@@ -243,7 +251,10 @@ calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, 
           legend.title=element_text(family="sans",size=8)
     )+
     coord_cartesian(ylim=c(0,1))
-  return(list(p2, p_raw_noruns))
+  return(list(p2, p_raw_noruns, noruns_comparison_all))
   
 }
-p <- calculate_titre_protection_curve(theta_chain, inf_chain,titre_dat,antigenic_map,par_tab,1:5,10,1,remove_runs = TRUE)
+rm(chains)
+p <- calculate_titre_protection_curve(theta_chain, inf_chain,titre_dat,antigenic_map,par_tab,1:5,n_samps,4,remove_runs = TRUE)
+#p[[2]]$data %>% dplyr::rename(`Posterior median relative risk of infection`=median,`Lower 95% CrI`=lower,`Upper 95% CrI`=upper) %>%
+#  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig5.csv",row.names=FALSE)

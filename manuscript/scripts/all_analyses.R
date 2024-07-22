@@ -69,7 +69,7 @@ setwd(main_wd)
 source(paste0(main_wd,"scripts/aux/function_plot.R"))
 
 ## Where are the MCMC chains saved?
-chain_wd<- "~/Documents/GitHub/fluscape_serosolver/chains/fluscape_main/"
+chain_wd<- "~/Documents/GitHub/fluscape_infection_histories/chains/fluscape_main/"
 chain_wd_alternative <- "~/Documents/GitHub/fluscape_serosolver/chains/fluscape_offset_estimation2/"
 use_alternative_prior <- FALSE
 use_base_results <- TRUE
@@ -89,7 +89,7 @@ data_file_loc <- "~/Documents/GitHub/fluscape_infection_histories/data/fluscape_
 buckets <- 4 ## Set to 1 for annual version, 4 for quarterly version
 burnin_use <- 20000000
 burnin_use_alternative <- 2000000
-remove_duplicate_infections <- FALSE
+remove_duplicate_infections <- TRUE
 rerun_regressions <- FALSE
 #################################
 ##  Load in ALL of the fluscape data

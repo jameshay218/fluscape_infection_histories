@@ -1,0 +1,314 @@
+---
+title: "Raw data plots"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+fluscape_wd <- "~/Documents/GitHub/fluscape/"
+load("~/Documents/GitHub/fluscape_serosolver/manuscript/r_data/fluscape_dat.RData")
+
+library(tidyverse)
+
+## Get seropositivity
+fluscape_dat$seropos_v1 <- fluscape_dat$v1_titre >= 3
+fluscape_dat$seropos_v2 <- fluscape_dat$v2_titre >= 3
+fluscape_dat$change <- fluscape_dat$v2_titre - fluscape_dat$v1_titre
+fluscape_dat[fluscape_dat$change > 3 & !is.na(fluscape_dat$change), "change"] <- 4
+fluscape_dat[fluscape_dat$change < -3 & !is.na(fluscape_dat$change), "change"] <- -4
+fluscape_dat[fluscape_dat$change == 4 & !is.na(fluscape_dat$change),"change"] <- "≥4"
+fluscape_dat[fluscape_dat$change == "-4" & !is.na(fluscape_dat$change),"change"] <- "≤-4"
+change_levels <- c("≤-4",as.character(seq(-3,3,by=1)),"≥4")
+fluscape_dat$change <- factor(fluscape_dat$change, levels=change_levels,ordered=TRUE)
+colnames(fluscape_dat)[colnames(fluscape_dat) == "change"] <- "Change in titre"
+
+## Seroconverted
+seroconverted <- unique(fluscape_dat[fluscape_dat$visit == "Second visit",c("individual","Full_name","virus","Change in titre","age_group")])
+seroconverted$seroconversion <- seroconverted$`Change in titre` >= 2
+seroconverted <- seroconverted %>% as_tibble() %>% 
+  filter(!is.na(seroconversion)) %>%
+  ungroup() %>%
+  dplyr::group_by(age_group,Full_name)%>%
+  dplyr::summarize(N=n(),N_seroconv=sum(seroconversion,na.rm=TRUE),.groups="keep") %>%
+  mutate(`Percentage seroconverted (≥ 4-fold rise)`=100*N_seroconv/N)
+
+library(coda)
+library(data.table)
+library(plyr)
+library(bayesplot)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(mgcv)
+library(itsadug)
+```
+
+
+```{r, fig.height=8,fig.width=8}
+## Generate age group breaks
+tmp <- unique(fluscape_dat[,c("individual","age_group")])
+age_group_counts <- c(0,cumsum(ddply(tmp, ~age_group, nrow)$V1))
+age_group_counts <- age_group_counts[1:(length(age_group_counts)-1)]
+
+
+
+len.cols <- length(0:8)
+cols <- colorRampPalette(c("royalblue", "khaki1", "red"))(len.cols)
+
+p1 <- ggplot(fluscape_dat[fluscape_dat$visit == "First visit",]) + 
+  #geom_tile(aes(x=order,y=virus,fill=`log titre`)) + 
+  geom_tile(aes(x=order,y=Full_name,fill=`log titre`)) + 
+  theme_bw() + 
+  scale_fill_manual(values=cols, guide=guide_legend(reverse=TRUE, direction="vertical",title.position="right",
+                                          label.position="left"))+
+  scale_y_discrete(expand=c(0,0))+
+  #scale_y_continuous(expand=c(0,0),breaks=strains1$virus,labels=strains1$Full_name) + 
+  scale_x_continuous(expand=c(0,0), breaks=age_group_counts, labels=c(0,10,20,30,40,50,60)) + 
+  #facet_wrap(~visit,nrow=2) +
+  theme(panel.grid = element_blank(),
+        axis.text.x=element_text(family="sans",size=8,colour="black"),
+        axis.text.y=element_text(family="sans",size=8,colour="black"),
+        legend.text=element_text(size=8,family="sans"),
+        legend.title=element_text(size=8,family="sans",angle=-90,hjust=0.5),
+        legend.key.size=unit(0.08,"in"),
+        legend.justification = "left",
+        legend.margin=margin(c(0,0,0,0)),
+        legend.box.margin=margin(c(0,0,0,-5)),
+        legend.key=element_rect(color="black")) +
+  xlab("") +
+  ylab("")
+
+p2 <- ggplot(fluscape_dat[fluscape_dat$visit == "Second visit",]) + 
+ #geom_tile(aes(x=order,y=virus,fill=`log titre`)) + 
+  geom_tile(aes(x=order,y=Full_name,fill=`log titre`)) + 
+  theme_bw() + 
+  scale_fill_manual(values=cols, guide=guide_legend(reverse=TRUE, direction="vertical",title.position="right",
+                                          label.position="left"))+
+  #scale_y_continuous(expand=c(0,0),breaks=strains1$virus,labels=strains1$Full_name) + 
+  scale_y_discrete(expand=c(0,0))+
+  scale_x_continuous(expand=c(0,0), breaks=age_group_counts, labels=c(0,10,20,30,40,50,60)) + 
+  #facet_wrap(~visit,nrow=2) +
+  theme(panel.grid = element_blank(),
+        axis.text.x=element_text(family="sans",size=8,colour="black"),
+        axis.text.y=element_text(family="sans",size=8,colour="black"),
+        legend.text=element_text(size=8,family="sans"),
+        legend.title=element_text(size=8,family="sans",angle=-90,hjust=0.5),
+        legend.key.size=unit(0.08,"in"),
+        legend.justification = "left",
+        legend.margin=margin(c(0,0,0,0)),
+        legend.box.margin=margin(c(0,0,0,-5)),
+        legend.key=element_rect(color="black"))+
+  xlab("") +
+  ylab("")
+
+len.cols <- length(change_levels)
+cols1 <- colorRampPalette(c("springgreen4", "cornsilk1", "purple4"))(len.cols)
+
+#fluscape_dat_tmp <- fluscape_dat_tmp_2 <- fluscape_dat[1,]
+#fluscape_dat_tmp[2] <- fluscape_dat_tmp_2[2] <- NA
+#fluscape_dat_tmp["order"] <- fluscape_dat_tmp_2["order"] <- NA
+#fluscape_dat_tmp["Change in titre"] <- "-8"
+#fluscape_dat_tmp_2["Change in titre"] <- "-6"
+#fluscape_dat2 <- fluscape_dat
+#fluscape_dat2 <- rbind(fluscape_dat2, fluscape_dat_tmp, fluscape_dat_tmp_2)
+
+
+p3 <- ggplot(fluscape_dat[!is.na(fluscape_dat$`Change in titre`),]) + 
+  #geom_tile(aes(x=order,y=virus,fill=`Change in titre`)) + 
+  geom_tile(aes(x=order,y=Full_name,fill=`Change in titre`)) + 
+  theme_bw() + 
+  scale_fill_manual(values=cols1, guide=guide_legend(reverse=TRUE, direction="vertical",title.position="right",
+                                          label.position="left"))+
+ # scale_y_continuous(expand=c(0,0),breaks=strains1$virus,labels=strains1$Full_name) + 
+  scale_y_discrete(expand=c(0,0))+
+  scale_x_continuous(expand=c(0,0), breaks=age_group_counts, labels=c(0,10,20,30,40,50,60)) + 
+  theme(panel.grid = element_blank(),
+        axis.text.x=element_text(family="sans",size=8,colour="black"),
+        axis.text.y=element_text(family="sans",size=8,colour="black"),
+        legend.text=element_text(size=8,family="sans"),
+        legend.title=element_text(size=8,family="sans",angle=-90,hjust=0.5),
+        legend.key.size=unit(0.08,"in"),
+        legend.justification = "left",
+        legend.margin=margin(c(0,0,0,0)),
+        legend.box.margin=margin(c(0,0,0,-10)),
+        legend.key=element_rect(color="black"))+
+  xlab("Age group") +
+  ylab("")
+
+fig_unused <- cowplot::plot_grid(p1,p2,p3,ncol=1,align="hv",labels=c("A","B","C"))
+
+
+```
+
+
+```{r}
+## Strains used
+strains <- read.csv("~/Documents/GitHub/fluscape_infection_histories//data/strains.csv",stringsAsFactors=FALSE)
+strains$Full_name <- factor(strains$Full_name, levels=strains$Full_name,ordered=TRUE)
+
+
+#seroconverted <- ddply(seroconverted, .(age_group, Full_name), function(x) 100*nrow(x[x$seroconversion == TRUE,])/nrow(x))
+#colnames(seroconverted)[3] <- "Percentage seroconverted (≥ 4-fold rise)"
+seroconverted <- merge(seroconverted, first_strains)
+seroconverted$label <- signif(seroconverted$`Percentage seroconverted (≥ 4-fold rise)`,3)
+
+## For each birth cohort, see if anyone was alive when virus circulated
+age_births <- max(fluscape_dat$samples) - c(10,20,30,40,50, 60,100)*4
+first_strains <- sapply(age_births, function(x) {
+  strains$virus > x
+})
+first_strains <- data.frame(first_strains)
+colnames(first_strains) <- levels(fluscape_dat$age_group)
+first_strains$Full_name <- strains$Full_name
+first_strains <- melt(first_strains, id="Full_name")
+first_strains <- first_strains[complete.cases(first_strains),]
+colnames(first_strains) <- c("Full_name","age_group","alive")
+first_strains$alive <- factor(first_strains$alive, levels=c("TRUE","FALSE"),ordered=TRUE)
+tmp <- seroconverted[seroconverted$alive == FALSE,]
+limits <- ddply(tmp, ~age_group, function(x) x[which.max(x$Full_name),])
+limits$x_start <- limits$age_group
+limits$x_end <- factor(levels(limits$age_group)[as.numeric(limits$age_group) + 1], levels=levels(limits$age_group))
+limits$last_strain <- limits$Full_name
+for(i in 1:(nrow(limits)-1)){
+  limits$last_strain[i] <- limits$Full_name[i+1]
+}
+limits$last_strain <- as.numeric(limits$last_strain)
+limits[nrow(limits),"last_strain"] <- 0
+
+
+y_breaks <- as.numeric(unique(fluscape_dat$Full_name))
+y_labels <- levels(fluscape_dat$Full_name)
+y_labels <- y_labels[y_labels != "X31"]
+
+x_breaks <- as.numeric(unique(fluscape_dat$age_group))
+x_breaks <- sort(x_breaks)
+x_labels <- levels(fluscape_dat$age_group)
+
+seropos_dat_v1 <- fluscape_dat[fluscape_dat$visit == "First visit",c("individual","Full_name","virus","seropos_v1","v1_titre","run","age_group")]
+seropos_dat_v1 <- ddply(seropos_dat_v1, .(individual,Full_name), function(x) x[which.max(x$v1_titre),])
+seropos_dat_v1$seropos_v1 <- seropos_dat_v1$v1_titre >= 3
+
+v1_seropos <- ddply(seropos_dat_v1, .(age_group, Full_name), function(x) nrow(x[x$seropos_v1 == TRUE,])/nrow(x))
+colnames(v1_seropos)[3] <- "Proportion seropositive (≥ 1:40)"
+v1_seropos <- merge(v1_seropos, first_strains)
+
+v1_p <- ggplot(v1_seropos) + 
+  geom_tile(aes(x=as.integer(age_group),y=as.integer(Full_name),fill=`Proportion seropositive (≥ 1:40)`))+#,col=alive),
+            #size=0.6, height=0.98,width=0.98)+
+  geom_segment(data=limits,aes(x=as.integer(x_start)-0.5,y=as.integer(Full_name)+0.5,
+                               yend=as.integer(Full_name)+0.5,xend=as.integer(x_end)-0.5),
+                               col="gray20", size=1) +
+  geom_segment(data=limits,aes(x=as.integer(x_start)+0.5,y=as.numeric(Full_name)+0.5, 
+                               yend=last_strain+0.5, xend=as.integer(x_start)+0.5),
+                               col="gray20", size=1) +
+  scale_y_continuous(expand=c(0,0),breaks=y_breaks,labels=y_labels) + 
+  scale_x_continuous(expand=c(0,0),breaks=x_breaks,labels=x_labels) + 
+  theme_bw() + 
+  scale_color_manual(values=c("forestgreen","gray30"))+
+  scale_fill_gradient2(low="royalblue",mid="khaki1",high="red",midpoint=0.5,
+                       guide=guide_colorbar(direction="vertical",title.position="right",
+                                          label.position="left")) +
+  theme(panel.grid = element_blank(),
+        axis.text.x=element_text(family="sans",size=8,colour="black"),
+        axis.text.y=element_text(family="sans",size=8,colour="black"),
+        legend.text=element_text(size=8,family="sans"),
+        legend.title=element_text(size=8,family="sans",angle=-90,hjust=0.5),
+        legend.key.height=unit(0.4,"in"),
+        legend.key.width=unit(0.1,"in"),
+        legend.justification = "left",
+        legend.margin=margin(c(0,0,0,0)),
+        legend.box.margin=margin(c(0,0,0,0)),
+        legend.key=element_rect(color="black"))+
+  xlab("Age group") +
+  ylab("")
+
+seropos_dat_v2 <- fluscape_dat[fluscape_dat$visit == "First visit",c("individual","Full_name","virus","seropos_v2","v2_titre","run","age_group")]
+seropos_dat_v2 <- ddply(seropos_dat_v2, .(individual,Full_name), function(x) x[which.max(x$v2_titre),])
+seropos_dat_v2$seropos_v2 <- seropos_dat_v2$v2_titre >= 3
+
+v2_seropos <- ddply(seropos_dat_v2, .(age_group, Full_name), function(x) nrow(x[x$seropos_v2 == TRUE,])/nrow(x))
+colnames(v2_seropos)[3] <- "Proportion seropositive (≥ 1:40)"
+v2_seropos <- merge(v2_seropos, first_strains)
+v2_p <- ggplot(v2_seropos) + 
+  geom_tile(aes(x=as.integer(age_group),y=as.integer(Full_name),fill=`Proportion seropositive (≥ 1:40)`))+#,col=alive),
+            #size=0.6, height=0.98,width=0.98)+
+  geom_segment(data=limits,aes(x=as.integer(x_start)-0.5,y=as.integer(Full_name)+0.5,
+                               yend=as.integer(Full_name)+0.5,xend=as.integer(x_end)-0.5),
+                               col="gray20", size=1) +
+  geom_segment(data=limits,aes(x=as.integer(x_start)+0.5,y=as.numeric(Full_name)+0.5, 
+                               yend=last_strain+0.5, xend=as.integer(x_start)+0.5),
+                               col="gray20", size=1) +
+  scale_y_continuous(expand=c(0,0),breaks=y_breaks,labels=y_labels) + 
+  scale_x_continuous(expand=c(0,0),breaks=x_breaks,labels=x_labels) + 
+  scale_fill_gradient2(low="royalblue",mid="khaki1",high="red",midpoint=0.5,
+                       guide=guide_colorbar(direction="vertical",title.position="right",
+                                          label.position="left")) +
+  scale_color_manual(values=c("forestgreen","gray30"))+
+  theme(panel.grid = element_blank(),
+        axis.text.x=element_text(family="sans",size=8,colour="black"),
+        axis.text.y=element_text(family="sans",size=8,colour="black"),
+        legend.text=element_text(size=8,family="sans"),
+        legend.title=element_text(size=8,family="sans",angle=-90,hjust=0.5),
+        legend.key.height=unit(0.4,"in"),
+        legend.key.width=unit(0.1,"in"),
+        legend.justification = "left",
+        legend.margin=margin(c(0,0,0,0)),
+        legend.box.margin=margin(c(0,0,0,0)),
+        legend.key=element_rect(color="black"))+
+  xlab("Age group") +
+  ylab("")
+
+
+cols1 <- colorRampPalette(c("springgreen4", "cornsilk1", "purple4"))(len.cols)
+seroconverted$label <- paste0(seroconverted$label, " (", seroconverted$N,")")
+
+seroconverted_save <- seroconverted %>% dplyr::select(age_group, Full_name,N,N_seroconv,`Percentage seroconverted (≥ 4-fold rise)`) %>%
+  dplyr::rename(`Age group` = age_group,`Number seroconverted`=N_seroconv,`Virus`=Full_name,
+                `Percentage seroconverted (>= 4-fold rise)`=`Percentage seroconverted (≥ 4-fold rise)`)
+
+v1_save <- v1_seropos %>% dplyr::rename(`Age group` = age_group,`Virus`=Full_name,
+                `Proportion seropositive (>= 1:40)`=`Proportion seropositive (≥ 1:40)`)
+v2_save <- v2_seropos %>% dplyr::rename(`Age group` = age_group,`Virus`=Full_name,
+                `Proportion seropositive (>= 1:40)`=`Proportion seropositive (≥ 1:40)`)
+
+write.csv(seroconverted_save,file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig1C.csv",row.names = FALSE)
+write.csv(v1_save,file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig1A.csv",row.names = FALSE)
+write.csv(v2_save,file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig1B.csv",row.names = FALSE)
+
+seroconv_p <- ggplot(seroconverted) + 
+  geom_tile(aes(x=as.integer(age_group),y=as.integer(Full_name),fill=`Percentage seroconverted (≥ 4-fold rise)`)) +#,col=alive),
+           # size=0.6, height=0.98,width=0.98)+
+  #geom_text(aes(x=as.integer(age_group),y=as.integer(Full_name),label=label),size=3)+
+  geom_segment(data=limits,aes(x=as.integer(x_start)-0.5,y=as.integer(Full_name)+0.5,
+                               yend=as.integer(Full_name)+0.5,xend=as.integer(x_end)-0.5),
+               col="gray20", size=1) +
+  geom_segment(data=limits,aes(x=as.integer(x_start)+0.5,
+                               y=as.numeric(Full_name)+0.5, 
+                               yend=last_strain+0.5,xend=as.integer(x_start)+0.5),
+                                                  col="gray20", size=1) +
+  scale_y_continuous(expand=c(0,0),breaks=y_breaks,labels=y_labels) + 
+  scale_x_continuous(expand=c(0,0),breaks=x_breaks,labels=x_labels) + 
+  theme_bw() + 
+  scale_fill_gradient2(low="purple1",mid="cornsilk1",high="springgreen4",midpoint=50,limits=c(0,100),
+                       guide=guide_colorbar(direction="vertical",title.position="right",
+                                          label.position="left")) +
+  scale_color_manual(values=c("forestgreen","gray30"))+
+  theme(panel.grid = element_blank(),
+        axis.text.x=element_text(family="sans",size=8,colour="black"),
+        axis.text.y=element_text(family="sans",size=8,colour="black"),
+        legend.text=element_text(size=8,family="sans",hjust=1),
+        legend.title=element_text(size=8,family="sans",angle=-90),
+        legend.key.height=unit(0.4,"in"),
+        legend.key.width=unit(0.1,"in"),
+        legend.justification = "left",
+        legend.margin=margin(c(0,0,0,0)),
+        legend.box.margin=margin(c(0,0,0,0)),
+        legend.key=element_rect(color="black"))+
+  xlab("Age group") +
+  ylab("")
+
+fig1 <- cowplot::plot_grid(v1_p, v2_p, seroconv_p,nrow=3,labels=c("A","B","C"), align="hv")
+jahR::save_plots(fig1,"~/Documents/GitHub/fluscape_infection_histories/manuscript/figures/","Fig1",height=10,width=8)
+
+```

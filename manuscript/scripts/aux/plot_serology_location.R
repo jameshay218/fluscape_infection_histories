@@ -15,6 +15,11 @@ library("sp")
 library("raster")
 #library("maptools")
 library("RColorBrewer")
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(data.table)
+library(cowplot)
 # read in china census data
 path = "data/China census 2008/"
 census.hh.size = read.csv( paste(path,"china2008.household.size.csv",sep=""), header=TRUE )
@@ -41,11 +46,9 @@ fluscape_dat <- merge(fluscape_dat, locs[,c("LOC_ID","LOC_Lat_rnd","LOC_Long_rnd
 
 ## Need to plot with jittered locations
 locs_use <- read.csv("~/Documents/GitHub/fluscape_serosolver/data/loc_data_rnd.csv")
-locs <- locs %>% select(-c(LOC_Lat,LOC_Long)) %>% left_join(locs_use %>% select(-c(LOC_Lat_original,LOC_Long_original))) %>% rename(LOC_Lat=LOC_Lat_rnd,
-                                                                                                                                    LOC_Long=LOC_Long_rnd)
+locs <- locs %>% dplyr::select(-c(LOC_Lat,LOC_Long)) %>% left_join(locs_use %>% dplyr::select(-c(LOC_Lat_original,LOC_Long_original))) %>% dplyr::rename(LOC_Lat=LOC_Lat_rnd,LOC_Long=LOC_Long_rnd)
 
-fluscape_dat <- fluscape_dat %>% select(-c(LOC_Lat,LOC_Long)) %>% left_join(locs_use %>% select(-c(LOC_Lat_original,LOC_Long_original))) %>% rename(LOC_Lat=LOC_Lat_rnd,
-                                                                                                                                    LOC_Long=LOC_Long_rnd)
+fluscape_dat <- fluscape_dat %>% dplyr::select(-c(LOC_Lat,LOC_Long)) %>% left_join(locs_use %>% dplyr::select(-c(LOC_Lat_original,LOC_Long_original))) %>% dplyr::rename(LOC_Lat=LOC_Lat_rnd, LOC_Long=LOC_Long_rnd)
 
 
 
@@ -71,6 +74,10 @@ loc_plots <- list()
 
 #y <- age_group_counts1
 visit <- "First visit"
+
+#fluscape_dat %>% select(individual,LOC_ID,quintile,LOC_Lat,LOC_Long,Full_name,`log titre`,run,raw_visit,age_group) %>%
+#  dplyr::rename(`Virus`=Full_name) %>%
+#  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS2&3.csv",row.names=FALSE)
 
 ## Group 3
 for(k in unique(fluscape_dat$quintile)){
@@ -162,9 +169,11 @@ for(k in seq_along(ps)){
     }
   }
 }
+if(FALSE){
 pdf("~/Documents/GitHub/fluscape_infection_histories/figures/serology_by_loc_v1.pdf",height=8,width=7.2)
 plot_grid(plot_grid(plotlist=ps,nrow=1), plot_grid(plotlist=loc_plots,nrow=1),nrow=2,rel_heights=c(6,1))
 dev.off()
 png("~/Documents/GitHub/fluscape_infection_histories/figures/serology_by_loc_v1.png",height=8,width=7.2,res=300,units="in")
 plot_grid(plot_grid(plotlist=ps,nrow=1), plot_grid(plotlist=loc_plots,nrow=1),nrow=2,rel_heights=c(6,1))
 dev.off()
+}

@@ -530,6 +530,7 @@ p_samples <- ggplot(sample_counts) +
   xlab("Sampling time") 
 ggsave_jah(p_samples, figure_wd, "sample_times",6,4)
 
+## sample_counts %>% mutate(samples=samples/4) %>% write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS1.csv",row.names=FALSE)
 
 #fluscape_dat <- fluscape_dat[!is.na(fluscape_dat$change),]
 fluscape_dat <- fluscape_dat %>% select(virus, individual, DOB, samples, LOC_ID, group, `log titre`,run,raw_visit, LOC_Lat,LOC_Long, dens.1, dens.9, age, age_group,birth_cohort,visit,order,Virus,Full_name, Strain, Year, v1_titre, v2_titre, change)
