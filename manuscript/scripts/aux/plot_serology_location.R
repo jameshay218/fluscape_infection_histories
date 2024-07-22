@@ -1,7 +1,3 @@
-setwd("~/Documents/GitHub/fluscape")
-#source("~/Google Drive/Drive/Influenza/serosolver/FluScape_epidemiology/scripts/extract_fluscape_dat.R")
-load("~/Documents/GitHub/fluscape_infection_histories/manuscript/r_data/fluscape_dat.RData")
-
 fluscape_dat[fluscape_dat$change > 3 & !is.na(fluscape_dat$change), "change"] <- 4
 fluscape_dat[fluscape_dat$change < -3 & !is.na(fluscape_dat$change), "change"] <- -4
 fluscape_dat[fluscape_dat$change == 4 & !is.na(fluscape_dat$change),"change"] <- "≥4"
@@ -15,23 +11,19 @@ library("sp")
 library("raster")
 #library("maptools")
 library("RColorBrewer")
-library(tidyverse)
-library(plyr)
-library(dplyr)
-library(data.table)
-library(cowplot)
+
 # read in china census data
-path = "data/China census 2008/"
+path = "~/Documents/GitHub/fluscape/data/China census 2008/"
 census.hh.size = read.csv( paste(path,"china2008.household.size.csv",sep=""), header=TRUE )
 census.age.demogr = read.csv( paste(path,"china2008.demography.csv",sep=""), header=TRUE )
 
 # read in population density data
-path = "data/landscan/"
+path = "~/Documents/GitHub/fluscape/data/landscan/"
 require("sp")
 pop <- read.asciigrid( paste(path,"prd_sim_ascii_n_44384655.txt",sep="") )
 
 # read in boundary & coastline map data
-path = "data/Noaa maps/"
+path = "~/Documents/GitHub/fluscape/data/Noaa maps/"
 boundaries <- read.table(paste(path,"boundaries.dat",sep=""), header=FALSE, 
                          sep="", stringsAsFactors=FALSE, na.strings = c("NA",">"), fill=TRUE )
 coast <- read.table(paste(path,"coast.dat",sep=""), header=FALSE, 
