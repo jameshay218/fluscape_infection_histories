@@ -20,8 +20,6 @@ colnames(densities) <- c("individual","time","Posterior probability of infection
 wow <- merge(needed_fluscape_dat, densities,by="individual")
 wow <- merge(wow, data.table(masks),by="individual")
 
-wow$age_mask <- strain_isolation_times[wow$age_mask]
-wow$strain_mask <- strain_isolation_times[wow$strain_mask]
 wow[wow$time < wow$age_mask | wow$time > wow$strain_mask,"Posterior probability of infection"] <- NA
 
 
@@ -99,6 +97,14 @@ ar_p <- ar_p1 + theme_classic() +
   )
 ar_p
 
+n_alive <- as.data.frame(get_n_alive_group(titre_dat, strain_isolation_times)) %>% t() %>% as.data.frame() %>% rename(`N alive`=V1)
+n_alive$Date <- as.numeric(rownames(n_alive))/4
+
+ar_p_data <- ar_p$data %>% select(-group) %>% mutate(time=time/4) %>% rename(`Date`=time,`Lower 95% CrI`=lower, `Lower 50% CrI`=lower2,
+                                                                             `Posterior median`=`median`,`Upper 50% CrI`=upper,`Upper 95% CrI`=upper) %>%
+  left_join(n_alive)
+write.csv(ar_p_data,"~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig2A.csv",row.names=FALSE)
+
 first_sample <- min(titre_dat$samples)
 first_sample <- 8020
 inf_chain_tmp <- inf_chain[inf_chain$j >= (first_sample - 7872),]
@@ -114,7 +120,10 @@ x_labels2 <- paste0(c("Q1-","Q2-","Q3-","Q4-"),x_labels2_tmp)
 x_labels2 <- x_labels2[seq_along(x_breaks2)]
 
 p_fig2 <- cowplot::plot_grid(ar_p, p_infection, nrow=2,align="hv",axis="lr",rel_heights = c(1,1.8),labels=c("A","B"))
-p_infection$data %>% select(individual,DOB,time,`Posterior probability of infection`)
+
+p_infection_data <- p_infection$data %>% select(individual,DOB,time,`Posterior probability of infection`)
+write.csv(p_infection_data,"~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig2B.csv",row.names=FALSE)
+
 ggsave_jah(p_fig2, figure_wd,"combined_infections_fig2",width=7.2,height=6)
 
 infection_histories <- inf_chain
