@@ -1,4 +1,4 @@
-f_tmp <- function(thin_hist=TRUE){
+f_tmp <- function(thin_hist=TRUE,save_data=FALSE){
     
     ## Where to read MCMC chains from?
     #load("~/Google Drive/Influenza/serosolver/FluScape_epidemiology/r_data/Old/measurement_annual_bb_new.RData")
@@ -40,7 +40,13 @@ f_tmp <- function(thin_hist=TRUE){
                 labs(tag="A") +
       scale_y_continuous(limits=c(0,25),breaks=seq(0,25,by=5),expand=c(0,0))
     p1
-    
+    if(save_data){
+      
+      p1$data %>% rename(`Lower 95% CrI`=lower,`Posterior median`=median,`Upper 95% CrI`=upper) %>% 
+        
+        write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS12A.csv",row.names=FALSE)
+      
+    }
     ## Fitted data
     ## For each individual, how many infections did they have in each sample in total?
     n_strain <- max(inf_chain1$j)
@@ -122,6 +128,16 @@ f_tmp <- function(thin_hist=TRUE){
       xlab("Number of infections per decade years alive") +
       ylab("Density")
     
+    if(save_data){
+      
+      indiv_hist %>% select(-ver) %>% rename(`Lower 95% CrI`=lower,`Posterior median`=median,`Upper 95% CrI`=upper) %>%
+        
+        rename(`Number of years exposed`=n_exposure_years,`Posterior median divided by years exposed`=median_density) %>% 
+        
+        write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS12B&D.csv",row.names=FALSE)
+      
+    }
+    
     print("Number of infections per decade")
     print(quantile(indiv_hist$median_density*10,c(0.025,0.5,0.975)))
     
@@ -169,7 +185,7 @@ f_tmp <- function(thin_hist=TRUE){
     
     p3 <- ggplot(no_infs_age) + 
       geom_boxplot(aes(y=y*buckets*10,x=age_group_at_infection),outlier.size=0.1,fill="grey70") + 
-      geom_text(data=samp_sizes_early,y=10.25, aes(x=age_group_at_infection,label=paste0("N=",n)),size=3) +
+      geom_text(data=samp_sizes,y=10.25, aes(x=age_group_at_infection,label=paste0("N=",n)),size=3) +
       theme_classic() +
       xlab("Age group at time of infection (years)") +
       ylab("Infections per decade spent in age group") +
@@ -184,7 +200,13 @@ f_tmp <- function(thin_hist=TRUE){
             axis.title.y=element_text(size=8,family="sans",color="black")) +
       labs(tag="C")
     p3
-    
+    if(save_data){
+      
+      no_infs_age %>% rename(Individual=i, `Age group at infection`=age_group_at_infection,`Infections per year spent in age group`=y) %>% 
+        
+        write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS12C.csv",row.names=FALSE)
+      
+    }
     
     p_lhs <- p1 / p3
     p_rhs <- p2 / p4
@@ -192,4 +214,4 @@ f_tmp <- function(thin_hist=TRUE){
     fig_age <-  (p_lhs | p_rhs) + plot_layout(widths=c(3,1),ncol=2)
     ggsave_jah(fig_age,figure_wd, "age_trends_alternative_prior",width=8,height=7)
 }
-f_tmp(FALSE)
+f_tmp(FALSE, TRUE)

@@ -17,6 +17,8 @@ p1 <- plot_number_infections(inf_chain,FALSE)  +
             labs(tag="A") +
   scale_y_continuous(limits=c(0,25),breaks=seq(0,25,by=5),expand=c(0,0))
 p1
+#p1$data %>% rename(`Lower 95% CrI`=lower,`Posterior median`=median,`Upper 95% CrI`=upper) %>%
+#  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig3A.csv",row.names=FALSE)
 
 ## Fitted data
 ## For each individual, how many infections did they have in each sample in total?
@@ -98,6 +100,12 @@ p4 <- ggplot(indiv_hist %>%
   labs(tag="D") +
   xlab("Number of infections per decade alive") +
   ylab("Density")
+
+#indiv_hist %>% select(-ver) %>% rename(`Lower 95% CrI`=lower,`Posterior median`=median,`Upper 95% CrI`=upper) %>%
+
+#  rename(`Number of years exposed`=n_exposure_years,`Posterior median divided by years exposed`=median_density) %>% 
+
+#  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig3B&D.csv",row.names=FALSE)
 
 if(FALSE){
 p4 <- gghistogram(indiv_hist %>% mutate(median_density=median_density*10),x="median_density",fill="grey70", y="..density..",
@@ -200,6 +208,8 @@ p3 <- ggplot(no_infs_age_summary_early) +
   labs(tag="C")
 p3
 
+#no_infs_age_summary_early %>% rename(Individual=i, `Age group at infection`=age_group_at_infection,`Age group width`=widths,`Infections per year spent in age group`=y) %>% write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/Fig3C.csv",row.names=FALSE)
+
 
 ## Get number of infections per age group for during Fluscape time periods
 inf_chain_age_late <- inf_chain_age %>% filter(j >= min(titre_dat$samples))
@@ -238,7 +248,7 @@ p3_alt <- ggplot(no_infs_age_summary_comb) +
         axis.title.x=element_text(size=8,family="sans",color="black"),
         axis.title.y=element_text(size=8,family="sans",color="black"))
 p3_alt
-
+#no_infs_age_summary_comb %>% rename(Individual=i, `Age group at infection`=age_group_at_infection,`Age group width`=widths,`Infections per year spent in age group`=y) %>% write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS11.csv",row.names=FALSE)
 
 
 

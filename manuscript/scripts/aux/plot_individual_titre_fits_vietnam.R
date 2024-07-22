@@ -61,6 +61,10 @@ plot_infection_histories_long_mod <- function(chain, infection_histories, titre_
     inf_hist_densities <- full_join(titre_dat %>% filter(individual %in% individuals) %>% 
                                         select(individual, samples_label, samples) %>% distinct(),inf_hist_densities)%>% 
       filter(variable <= samples)
+    
+    all_plot_data <- list(to_use,inf_hist_densities, model_preds[model_preds$individual %in% individuals,],
+                          titre_dat[titre_dat$individual %in% individuals,])
+    
     titre_pred_p <- ggplot(to_use) +
         geom_rect(data=inf_hist_densities,
                   aes(xmin=xmin,xmax=xmax,fill=value),ymin=min_titre-1,ymax=max_titre+2)+
@@ -90,7 +94,7 @@ plot_infection_histories_long_mod <- function(chain, infection_histories, titre_
         coord_cartesian(ylim=c(min_titre,max_titre+1),xlim=time_range) +
         scale_y_continuous(breaks=seq(min_titre,max_titre+2,by=2)) +
         facet_grid(individual~samples_label)
-    titre_pred_p
+    list(titre_pred_p,all_plot_data)
 }
 ## Create key to make better sample time labels
 time_key <- strain_isolation_times#titre_dat %>% select(samples) %>% distinct() %>% arrange(samples) %>% mutate(samples=samples) %>% pull(samples)
@@ -110,6 +114,27 @@ p_titre_fits <- plot_infection_histories_long_mod(chain=theta_chain,infection_hi
                                                   mu_indices=rep(1:48,each=4),
                                                   measurement_indices_by_time = rep(1:48,each=4),
                                                   par_tab=par_tab,time_key=time_key,virus_key=virus_key)
+
+
+plot_data <- p_titre_fits[[2]]
+p_titre_fits <- p_titre_fits[[1]]
+
+## Extract data for plot
+plot_data1 <- plot_data[[1]] %>% select(individual, virus, titre,lower,run, median,upper,samples,samples_label) %>% rename(lower_obs=lower,upper_obs=upper,median_obs=median) 
+plot_data2 <-plot_data[[2]]%>% mutate(infection_time=variable)
+plot_data3 <- plot_data[[3]] %>% select(individual, virus, lower, median,upper,samples) %>% distinct()
+plot_data4 <- left_join(plot_data1,plot_data3, by=c("individual","virus","samples")) %>% select(-c(samples)) %>%
+  rename(`Lower 95% prediction interval`=lower_obs, `Posterior median observation`=median_obs,
+         `Upper 95% prediction interval`=upper_obs, `Lower 95% CrI`=lower, `Upper 95% CrI`=upper, `Posterior median`=median,`Virus`=virus,`Sample time`=`samples_label`,`Repeat number`=run)
+plot_data2 <- plot_data2 %>% rename(`Sample time`=`samples_label`) %>% select(-samples) %>% rename(`Posterior probability of infection`=value)
+
+write.csv(plot_data4,"~/Documents/GitHub/fluscape_infection_histories//data/figure_data/FigS5Ai.csv",row.names=FALSE)
+write.csv(plot_data2,"~/Documents/GitHub/fluscape_infection_histories//data/figure_data/FigS5Aii.csv",row.names=FALSE)
+
+colnames(antigenic_map)[3] <- "inf_times"
+
+p_titre_fits$data %>% select(individual, samples_label, virus_label, titre, lower,lower_50,median,upper_50,upper)
+
 colnames(antigenic_map)[3] <- "inf_times"
 p_inf_hists <- generate_cumulative_inf_plots(inf_chain, 0, use_indivs, ages = DOBs,strain_isolation_times = antigenic_map$inf_times)
 p_cumu_infhist <- p_inf_hists[[1]] + scale_x_continuous(breaks=seq(1970,2015,by=5)*buckets,labels=seq(1970,2015,by=5)) + 
@@ -128,6 +153,10 @@ p_cumu_infhist <- p_inf_hists[[1]] + scale_x_continuous(breaks=seq(1970,2015,by=
           plot.margin=margin(r=15,t=5,l=5)) +labs(tag="B")
 p_titre_fits
 
+p_cumu_infhist_data <- p_cumu_infhist$data %>% dplyr::select(-chain_no) %>% dplyr::mutate(`Circulation time`=(as.numeric(as.character(variable)))) %>% rename(`Lower 95% CrI`=lower,
+                                                                                                                                                              `Upper 95% CrI`=upper,
+                                                                                                                                                              `Posterior median cumulative infections`=`median`)
+write.csv(p_cumu_infhist_data,"~/Documents/GitHub/fluscape_infection_histories//data/figure_data/FigS5B.csv",row.names=FALSE)
 
 ## Find RMSE
 if(FALSE){
