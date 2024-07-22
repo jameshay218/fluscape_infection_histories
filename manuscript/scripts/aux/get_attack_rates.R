@@ -1,7 +1,7 @@
 ################################################################
 ## CALCULATE ATTACK RATE STATISTICS FOR PAPER
 ################################################################
-save_name <- if_else(remove_duplicate_infections, "Table2","TableS2")
+save_name <- if_else(!use_base_results, "Table2","TableS2")
 ## --------- Sample sizes over time ------------
 ## Need to manage who is "alive" in each time period
 ## Find if individual was available to be infected at each timepoint
@@ -50,7 +50,7 @@ all_reinfections_summaries <- all_reinfections %>%
 ## Get posterior median and 95% CrI for reinfections for each year
 all_reinfections_stats <- all_reinfections_summaries %>% 
   group_by(year) %>% 
-  dplyr::summarize(med=median(prop_reinfected*100),lower=quantile(prop_reinfected*100,0.025),upper=quantile(prop_reinfected*100,0.975))
+  dplyr::summarize(med=median(prop_reinfected),lower=quantile(prop_reinfected,0.025),upper=quantile(prop_reinfected,0.975))
 
 ##
 all_reinfections_stats %>%
@@ -80,7 +80,7 @@ all_reinfections %>% mutate(reinf_recent = total_infs > 1 & year >2008, reinf=to
 ## Get number alive and number of infections for each MCMC sample
 n_alive_time <- alive_effective %>% filter(alive == 1) %>% group_by(j) %>% tally()
 n_alive_time <- n_alive_time %>% mutate( j = j - min(j) + 1)
-n_infections_time <- inf_chain %>% group_by(j,sampno,chain_no) %>% dplyr::summarize(n=sum(x))
+n_infections_time <- inf_chain %>% filter(x== 1) %>% group_by(j,sampno,chain_no) %>% tally()
 n_infections_time <- n_infections_time %>% rename(n_infections=n)
 
 ## Merge with infection state posteriors and flag which time periods need to have new states imputed for (individuals who were alive but after their final sample collection)
@@ -151,7 +151,7 @@ ars_annual %>%
 
 ar_estimates_annual_summary <- ars_annual %>% group_by(year) %>% dplyr::summarize(med_ar = median(ar),lower=quantile(ar, 0.025),upper=quantile(ar,0.975))
 
-if(remove_duplicate_infections){
+if(!use_base_results){
   save(ar_estimates_annual_summary,file=paste0(main_wd,"r_data/fluscape_ar_estimates.RData"))
   save(ars_annual,file=paste0(main_wd,"r_data/fluscape_ar_estimates_draws.RData"))
 }
