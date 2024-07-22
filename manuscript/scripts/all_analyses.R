@@ -1,7 +1,7 @@
 ########################################
 ## RUN THROUGH ALL EXPLORATORY ANALYSES 
 ## Purpose: source all scripts and generate plots required for raw data analyses
-## Date: 15 March 2024
+## Date: 22 Jul 2024
 ## Author: James Hay
 ########################################
 library(coda)
@@ -157,7 +157,12 @@ if(!file.exists("r_data/measurement_quarter.RData")){
     save(inf_chain, theta_chain, par_tab, antigenic_map, titre_dat, strain_isolation_times,
          file=paste0(main_wd,"/r_data/measurement_quarter.RData"))
 } else {
+  if(remove_duplicate_infections){
     load("r_data/measurement_quarter.RData")
+  } else {
+    load("r_data/measurement_quarter_runs.RData")
+    
+  }
     colnames(antigenic_map)[3] <- "inf_times"
 }
 
@@ -279,7 +284,7 @@ write_csv(par_estimates,file="results/fluscape_parameter_estimates.csv")
 ## Plot antigenic map used
 spar_fon <- 0.3
 antigenic_coords_fonville <- read_csv("~/Documents/GitHub/fluscape_infection_histories/data/antigenic_map_coords/fonville_antigenic_coordinates.csv")
-
+antigenic_coords_fonville[antigenic_coords_fonville$Strain == 2009,"virus"] <- "PE09"
 antigenic_coords_fonville$virus <- factor(antigenic_coords_fonville$virus,levels=antigenic_coords_fonville$virus)
 fit_dat_fonville <- generate_antigenic_map_flexible(antigenic_coords_fonville,buckets=4,clusters=NULL,use_clusters=FALSE,spar_fon)
 p_antigenic_map <- ggplot() + 
@@ -331,34 +336,118 @@ vietnam_dob <- read.csv(paste0(main_wd,"../data/vietnam_ages.csv"))%>% mutate(in
 n_alive_group_vietnam <- get_n_alive_group(vietnam_dob, strain_isolation_times)
 ars_vietnam <- get_attack_rates(inf_chain, strain_isolation_times, titre_dat, n_alive_group_vietnam,FALSE)
 
+
+## Get posterior draws for proportion infected per year Vietnam
+inf_chain_vietnam <- inf_chain %>% group_by(j,sampno,chain_no) %>% filter(x == 1) %>% dplyr::summarize(n=n())
+inf_chain_vietnam$j <- strain_isolation_times[inf_chain_vietnam$j]
+n_alive_group_vietnam1 <- n_alive_group_vietnam %>% t() %>% as.data.frame() %>% mutate(j=1:n()) %>% rename(n_alive=V1)
+n_alive_group_vietnam1$j <- strain_isolation_times[n_alive_group_vietnam1$j]
+ars_annual_draws_vietnam <- left_join(inf_chain_vietnam, n_alive_group_vietnam1)
+colnames(ars_annual_draws_vietnam) <- c("Year","Posterior draw","MCMC chain","Number of infections","N alive")
+
+## Combine Fluscape and Vietnam draws
+load(paste0(main_wd,"r_data/fluscape_ar_estimates_draws.RData"))
+load(paste0(main_wd,"r_data/fluscape_ar_estimates.RData"))
+
+comb_ar_draws <- left_join(ars_annual_draws_vietnam %>% mutate(AR = `Number of infections`/`N alive`) %>% 
+                             group_by(Year) %>% 
+                             sample_n(1000,replace=TRUE) %>%
+                             mutate(draw=1:n()) %>% select(Year,AR,draw) %>% rename(AR_vietnam=AR),
+                           ars_annual%>% mutate(AR = `total_infs`/`n`) %>% group_by(year) %>% sample_n(1000,replace=TRUE) %>%
+                             rename(Year=year) %>%
+                             mutate(draw=1:n()) %>% select(Year,AR,draw) %>% rename(AR_fluscape=AR)) %>% 
+  mutate(diff=AR_fluscape-AR_vietnam)
+
+## Find which time points had >95% posterior probability of difference
+which_different <- comb_ar_draws %>% mutate(greater=diff > 0) %>% group_by(Year) %>% 
+  dplyr::summarize(prop_greater=sum(greater)/n())  %>% filter(prop_greater > 0.95 | prop_greater < 0.05) %>%
+  mutate(xmin=Year-0.5,xmax=Year+0.5)
+
+## Find time points had 25-75% draws suggesting difference
+which_same <- comb_ar_draws %>% mutate(greater=diff > 0) %>% group_by(Year) %>% 
+  dplyr::summarize(prop_greater=sum(greater)/n())  %>% filter(prop_greater > 0.25 & prop_greater < 0.75)%>%
+  mutate(xmin=Year-0.5,xmax=Year+0.5)
+
+p_ar_diffs <- ggplot(data=comb_ar_draws) + 
+  geom_rect(data=which_different %>% mutate(ymin=-1.1,ymax=1.1),fill="yellow",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
+  geom_rect(data=which_same %>% mutate(ymin=-1.1,ymax=1.1),fill="green",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
+  geom_violin(aes(x=Year,y=diff,group=Year),draw_quantiles = c(0.025,0.5,0.975),scale="width",fill="grey70") +
+  geom_hline(yintercept=0,linetype="dashed") +
+  theme_classic() +
+  coord_cartesian(ylim=c(-1,1))+
+  scale_y_continuous(expand=c(.01,.01),breaks=seq(-1,1,by=0.2)) +
+  scale_x_continuous(breaks=seq(1970,2015,by=5),limits=c(1967,2015))+
+  ylab("Estimated difference in annual attack rate\nbetween Ha Nam and Fluscape") +
+  xlab("Date (years)") +
+  theme(legend.position="bottom",
+        plot.tag=element_text(face="bold")) +
+  labs(tag="B")
+
 ## Get comparable AR for fluscape:
 inf_chain %>% mutate(j = j + 1967) %>% group_by(j,sampno, chain_no) %>% dplyr::summarize(infected=sum(x)) %>% left_join(data.frame(j=1968:2012, n_alive=n_alive_group_vietnam[1,])) %>% mutate(prop = infected/n_alive) %>% group_by(sampno, chain_no) %>% dplyr::summarize(median_ar = median(prop)) %>% ungroup() %>% dplyr::summarize(med_med=median(median_ar),lower=quantile(median_ar,0.025), upper=quantile(median_ar,0.975))
 
 ggplot(ars_vietnam) + geom_pointrange(aes(x=j,ymin=lower,ymax=upper,y=median))
-ar_estimates_annual
 
-p_ar_comparison <- ar_estimates_annual %>%  rename(fluscape_ar = med_ar,fluscape_lower=lower,fluscape_upper=upper) %>% 
+
+
+p_ar_comparison <- ar_estimates_annual_summary %>%  rename(fluscape_ar = med_ar,fluscape_lower=lower,fluscape_upper=upper) %>% rename(j=year) %>%
   left_join(ars_vietnam %>% rename(vietnam_ar=median,vietnam_lower=lower,vietnam_upper=upper)) %>%
   ggplot() + 
-  geom_rect(data=data.frame(xmin=1967.5,xmax=1968.5,ymin=-0.2,ymax=1.1),fill="green",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
-  geom_rect(data=data.frame(xmin=1984.5,xmax=1985.5,ymin=-0.2,ymax=1.1),fill="yellow",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
-  geom_rect(data=data.frame(xmin=1991.5,xmax=1992.5,ymin=-0.2,ymax=1.1),fill="yellow",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
-  geom_rect(data=data.frame(xmin=1994.5,xmax=1997.5,ymin=-0.2,ymax=1.1),fill="yellow",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
-  geom_rect(data=data.frame(xmin=1999.5,xmax=2004.5,ymin=-0.2,ymax=1.1),fill="yellow",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
-  geom_rect(data=data.frame(xmin=1988.5,xmax=1989.5,ymin=-0.2,ymax=1.1),fill="green",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
-  geom_rect(data=data.frame(xmin=2008.5,xmax=2009.5,ymin=-0.2,ymax=1.1),fill="green",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
-  geom_rect(data=data.frame(xmin=2009.5,xmax=2012.5,ymin=-0.2,ymax=1.1),fill="yellow",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
+  geom_rect(data=which_different %>% mutate(ymin=-0.2,ymax=1.1),fill="yellow",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
+  geom_rect(data=which_same %>% mutate(ymin=-9,2,ymax=1.1),fill="green",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
   geom_pointrange(aes(x=j-0.1,ymin=fluscape_lower,ymax=fluscape_upper,y=fluscape_ar,col="Guangzhou, China"),size=0.2,fatten=0.2) +
   geom_pointrange(aes(x=j+0.1,ymin=vietnam_lower,ymax=vietnam_upper,y=vietnam_ar,col="Ha Nam, Vietnam"),size=0.2,fatten=0.2) +
   theme_classic() +
   coord_cartesian(ylim=c(0,1))+
   scale_color_manual(name="Location",values=c("Guangzhou, China"="red","Ha Nam, Vietnam"="grey30")) +
   scale_y_continuous(expand=c(.01,.01),breaks=seq(0,1,by=0.2)) +
-  scale_x_continuous(breaks=seq(1970,2015,by=5))+
+  scale_x_continuous(breaks=seq(1970,2015,by=5),limits=c(1967,2015))+
   ylab("Estimated proportion infected\n at least once per year") +
   xlab("Date (years)") +
-  theme(legend.position="bottom")
+  theme(legend.position="bottom",
+        plot.tag=element_text(face="bold")) +
+  labs(tag="A") 
+
+p_ar_draws_diff <- comb_ar_draws %>% mutate(greater=diff > 0) %>% group_by(Year) %>% 
+  dplyr::summarize(prop_greater=sum(greater)/n()) %>% 
+  ggplot() + 
+  geom_rect(data=which_different %>% mutate(ymin=-0.2,ymax=1.1),fill="yellow",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
+  geom_rect(data=which_same %>% mutate(ymin=-0.2,ymax=1.1),fill="green",alpha=0.25,aes(xmin=xmin,xmax=xmax,ymin=ymin,ymax=ymax)) +
+  geom_point(aes(x=Year,y=prop_greater)) + 
+  geom_hline(data=data.frame(x=c(0.05,0.5,0.95)),aes(yintercept=x),linetype="dashed") +
+  theme_classic() +
+  coord_cartesian(ylim=c(0,1))+
+  scale_y_continuous(expand=c(.01,.01),breaks=seq(0,1,by=0.2)) +
+  scale_x_continuous(breaks=seq(1970,2015,by=5),limits=c(1967,2015))+
+  ylab("Proportion of posterior draws\nFluscape AR > Ha Nam AR") +
+  xlab("Date (years)") +
+  theme(legend.position="bottom",
+        plot.tag=element_text(face="bold"))+
+  labs(tag="C")
+
 ggsave_jah(p_ar_comparison,wd = "figures/",save_name = "compare_ars",width=8,height=3)
+ggsave_jah((p_ar_comparison+theme(legend.position=c(0.25,0.8),
+                                  plot.tag=element_text(face="bold"))+jahR::theme_no_x_axis() )/(p_ar_diffs+jahR::theme_no_x_axis())/p_ar_draws_diff,wd="figures/",save_name="compare_ars2",width=8,height=8)
+## Plot attack rates and individual infection probabilities
+
+ar_estimates_annual_summary %>%  rename(fluscape_ar = med_ar,fluscape_lower=lower,fluscape_upper=upper) %>% 
+  rename(j=year)%>%
+  left_join(ars_vietnam %>% rename(vietnam_ar=median,vietnam_lower=lower,vietnam_upper=upper))  %>%
+  select(-c(group,taken,tested)) %>%
+  rename(`Year`=j,
+         `Fluscape posterior median attack rate`=fluscape_ar,
+         `Fluscape lower 95% CrI`=fluscape_lower,
+         `Fluscape upper 95% CrI`=fluscape_upper,
+         `Ha Nam posterior median attack rate`=vietnam_ar,
+         `Ha Nam lower 95% CrI`=vietnam_lower,
+         `Ha Nam upper 95% CrI`=vietnam_upper) %>%
+  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS6A.csv",row.names=FALSE)
+
+comb_ar_draws %>%
+  rename(`Ha Nam AR`=AR_vietnam,`Posterior draw`=draw,`Fluscape AR`=AR_fluscape,`Difference`=diff) %>%
+  write.csv(file="~/Documents/GitHub/fluscape_infection_histories/data/figure_data/FigS6B.csv",row.names=FALSE)
+
+
 ## Plot attack rates and individual infection probabilities
 source("scripts/aux/plot_individual_titre_fits_vietnam.R")
 
