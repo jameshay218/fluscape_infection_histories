@@ -80,7 +80,7 @@ We re-fit the full _serosolver_ model as described in section 4.2 but with the i
 The main script for this analysis is `scripts/serosolver_fluscape_main.R`, which takes ~7 days to run 50,000,000 iterations. An alternative version of this analysis at a coarser time resolution are also available: `scripts/serosolver_fuscape_main_annual.R` fits the same model but estimating infection histories for each 1-year window, and `scripts/serosolver_fuscape_main_mixedtime.R` estimates infection histories for each 1-year window prior to 2005, and per 3-month window thereafter.
 
 ## 5.0 Generating results and figures
-All of the code and files required to reproduce the figures and statistics in the manuscript are in the `manuscript` folder. The main file to run is `manuscript/scripts/all_analyses.R`, which should run each of the analyses in turn by sourcing each respective auxiliary script in `manuscript/scripts/aux`. Some of these scripts take a while to run.
+All of the code and files required to reproduce the figures and statistics in the manuscript are in the `manuscript` folder. The main file to run is `manuscript/scripts/all_analyses.R`, which should run each of the analyses in turn by sourcing each respective auxiliary script in `manuscript/scripts/aux`. Some of these scripts take a while to run. The vaccination comparison script is found at `manuscripts/scripts/compare_vacc_inference.R`.
 
 One crucial point is that you should not need to run most of the processing and data cleaning scripts. The `all_analyses.R` script will look for .RData objects in `manuscript/r_data` and only run certain scripts if these pre-processed objects do not exist -- these are `fluscape_dat.RData` and `measurement_quarter.RData`.
 
