@@ -125,7 +125,7 @@ f_tmp <- function(thin_hist=TRUE,save_data=FALSE){
             axis.title.y=element_text(size=8,family="sans",color="black"),
             plot.tag=element_text(face="bold")) +
       labs(tag="D") +
-      xlab("Number of infections per decade years alive") +
+      xlab("Number of infections per decade alive") +
       ylab("Density")
     
     if(save_data){

@@ -19,7 +19,7 @@ sampno_key <- theta_chain %>% dplyr::select(sampno, chain_no) %>% distinct() %>%
 theta_chain <- theta_chain %>% left_join(sampno_key) %>% dplyr::select(-sampno, chain_no) %>% dplyr::rename(sampno=sampno_new)
 inf_chain <- inf_chain %>% left_join(sampno_key) %>% dplyr::select(-sampno, chain_no) %>% dplyr::rename(sampno=sampno_new)
 
-n_samps <- 1000
+n_samps <- 100
 
 calculate_titre_protection_curve <- function(theta_chain, inf_chain, titre_dat, antigenic_map, par_tab, subset_indivs,n_samp,buckets=1,max_time=max(titre_dat$virus),min_time=min(titre_dat$virus),remove_runs=TRUE){
   use_indivs_all <- unique(titre_dat$individual)
